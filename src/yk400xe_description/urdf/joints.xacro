@@ -1,0 +1,56 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://ros.org/wiki/xacro">
+    
+    <joint name="J0" type="fixed">
+        <parent link="base_link"/>
+        <child  link="L1"/>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+    </joint>
+
+    <joint name="J1" type="revolute">
+        <parent link="L1"/>
+        <child  link="L2"/>
+        <origin xyz="0 0 0.140" rpy="0 0 0"/>
+        <axis xyz="0 0 1"/>
+        <limit effort="1000.0" lower="-${radians(132)}" upper="${radians(132)}" velocity="0.5"/>  <!-- +/- 132 deg -->
+    </joint>
+
+    <joint name="J2" type="revolute">
+        <parent link="L2"/>
+        <child  link="L3"/>
+        <origin xyz="0 0.225 0.0478" rpy="0 0 0"/>
+        <axis xyz="0 0 1"/>
+        <limit effort="1000.0" lower="-${radians(150)}" upper="${radians(150)}" velocity="0.5"/>  <!-- +/- 150 deg -->
+    </joint>
+
+    <joint name="J3" type="prismatic">
+        <parent link="L3"/>
+        <child  link="L4_dummy"/>
+        <origin xyz="0 0.175 -0.068402" rpy="0 0 0"/>   <!-- check z TODO -->
+        <axis xyz="0 0 1"/>
+        <limit effort="1000.0" lower="-0.150" upper="0" velocity="0.5"/>    <!-- 0 - 150 mm in -z  -->
+    </joint>
+
+    <joint name="J4" type="revolute">
+        <parent link="L4_dummy"/>
+        <child  link="L4"/>
+        <origin xyz="0 0 0" rpy="0 0 0"/>  
+        <axis xyz="0 0 1"/>
+        <limit effort="1000.0" lower="-${radians(360)}" upper="${radians(360)}" velocity="0.5"/>  <!-- +/- 360 deg -->
+    </joint>
+
+
+    <!-- Cosmetic joints -->
+    <joint name="L1_black_joint" type="fixed">
+        <parent link="L1"/>
+        <child  link="L1_black"/>
+        <origin xyz="0 0 0" rpy="0 0 0"/>  
+    </joint>
+
+    <joint name="L3_black_joint" type="fixed">
+        <parent link="L3"/>
+        <child  link="L3_black"/>
+        <origin xyz="0 0 0" rpy="0 0 0"/>   
+    </joint>
+
+</robot>

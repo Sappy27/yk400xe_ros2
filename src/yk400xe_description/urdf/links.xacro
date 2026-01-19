@@ -1,0 +1,128 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://ros.org/wiki/xacro">
+
+    <link name="base_link">
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+    </link>
+    
+    <link name="L1">
+        <inertial>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <mass value="1"/>  <!--TODO-->
+            <inertia ixx="0.001" ixy="0.0" ixz="0.0" iyy="0.001" iyz="0.0" izz="0.001"/><!--TODO-->
+        </inertial>
+        <visual>
+            <material name="white" />
+            <origin xyz="0 0 0" rpy="0 0 0" />
+            <geometry>
+                <mesh filename="package://yk400xe_description/meshes/L1_w.stl" scale="1 1 1"/>
+            </geometry>
+        </visual>
+
+        <!-- Change to mesh to a simpler -->
+        <collision>
+            <origin xyz="0.0 0.0 0.0" rpy="0 0 0" />
+            <geometry>
+                <mesh filename="package://yk400xe_description/meshes/L1_w.stl" scale="1 1 1"/>  
+            </geometry>
+        </collision> 
+    </link>
+
+    <link name="L1_black">
+        <visual>
+            <origin xyz="0 0 0" rpy="0 0 0" />
+            <geometry>
+                <mesh filename="package://yk400xe_description/meshes/L1_b.stl" scale="1 1 1"/>
+            </geometry>
+            <material name="black" />
+        </visual>
+    </link>
+
+    <link name="L2">
+        <inertial>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <mass value="1"/>  <!--TODO-->
+            <inertia ixx="0.001" ixy="0.0" ixz="0.0" iyy="0.001" iyz="0.0" izz="0.001"/><!--TODO-->
+        </inertial>
+        <visual>
+            <origin xyz="0 0 0" rpy="0 0 0" />
+            <geometry>
+                <mesh filename="package://yk400xe_description/meshes/L2.stl" scale="1 1 1"/>
+            </geometry>
+            <material name="white" />
+        </visual>
+
+        <!-- Change to mesh to a simpler -->
+        <collision>
+            <origin xyz="0.0 0.0 0.0" rpy="0 0 0" />
+            <geometry>
+                <mesh filename="package://yk400xe_description/meshes/L2.stl" scale="1 1 1"/>
+            </geometry>
+        </collision>
+    </link>
+
+    <link name="L3">
+        <inertial>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <mass value="1"/>  <!--TODO-->
+            <inertia ixx="0.001" ixy="0.0" ixz="0.0" iyy="0.001" iyz="0.0" izz="0.001"/><!--TODO-->
+        </inertial>
+        <visual>
+            <origin xyz="0 0.175 0" rpy="0 0 0" />
+            <geometry>
+                <mesh filename="package://yk400xe_description/meshes/L3_w.stl" scale="1 1 1"/>
+            </geometry>
+            <material name="white" />
+        </visual>
+
+        <!-- Change to mesh to a simpler -->
+        <collision>
+            <origin xyz="0 0.175 0" rpy="0 0 0" />
+            <geometry>
+                <mesh filename="package://yk400xe_description/meshes/L3_w.stl" scale="1 1 1"/>
+            </geometry>
+        </collision>
+    </link>
+
+    <link name="L3_black">
+        <visual>
+            <origin xyz="0 0.175 0" rpy="0 0 0" />
+            <geometry>
+                <mesh filename="package://yk400xe_description/meshes/L3_b.stl" scale="1 1 1"/>
+            </geometry>
+            <material name="black" />
+        </visual>
+    </link>
+
+    <link name="L4_dummy">
+        <inertial>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <mass value="1"/>  <!--TODO-->
+            <inertia ixx="0.001" ixy="0.0" ixz="0.0" iyy="0.001" iyz="0.0" izz="0.001"/><!--TODO-->
+        </inertial>
+    </link>
+
+    <link name="L4">
+        <inertial>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <mass value="1"/>  <!--TODO-->
+            <inertia ixx="0.001" ixy="0.0" ixz="0.0" iyy="0.001" iyz="0.0" izz="0.001"/><!--TODO-->
+        </inertial>
+        <visual>
+            <origin xyz="0 0 0" rpy="0 0 0" />
+            <geometry>
+                <mesh filename="package://yk400xe_description/meshes/L4.stl" scale="1 1 1"/>
+            </geometry>
+            <material name="black" />
+        </visual>
+
+        <!-- Change to mesh to a simpler -->
+        <collision>
+            <origin xyz="0.0 0.0 0.0" rpy="0 0 0" />
+            <geometry>
+                <mesh filename="package://yk400xe_description/meshes/L4.stl" scale="1 1 1"/>
+            </geometry>
+        </collision>
+    </link>
+
+</robot>

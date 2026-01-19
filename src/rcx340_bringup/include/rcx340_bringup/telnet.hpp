@@ -47,7 +47,7 @@ class TelnetCommunication{
 
         
         // Send an UNIQUE command to the controller
-        void send_command(std::string command,bool at=true)   // <-- par valeur
+        void send_command(std::string command)  
         {
             std::string msg;
             msg.reserve(command.size() + 2);
@@ -67,7 +67,7 @@ class TelnetCommunication{
         }
 
         // Send a BATCH of commands to the controller
-        void send_command(std::vector<std::string> batch, bool at=true)   // <-- par valeur
+        void send_command(std::vector<std::string> batch)   
         {
             for (auto& command : batch) {
                 std::string msg;
@@ -207,7 +207,7 @@ class TelnetCommunication{
 
             // Write the message asynchronously on the context thread
             m_socket.async_write_some(asio::buffer(msg.data(),msg.size()),
-               asio::bind_executor(m_strand, [this] (asio::error_code ec, size_t lenght){
+               asio::bind_executor(m_strand, [this] (asio::error_code ec, size_t /*lenght*/){
 
                     if (ec){
                         std::cerr << "Error while writing : " << ec.message() << std::endl;

@@ -12,6 +12,49 @@ find_package(ament_cmake REQUIRED)
 # find_package(<dependency> REQUIRED)
 
 find_package(rclcpp REQUIRED)
+find_package(std_msgs REQUIRED)
+find_package(sensor_msgs REQUIRED)
+find_package(std_srvs REQUIRED)
+find_package(yk400xe_interfaces REQUIRED)
+
+add_executable(joint_state_node src/joint_state_node.cpp)
+ament_target_dependencies( joint_state_node
+  rclcpp
+  std_msgs
+  sensor_msgs
+)
+
+install(
+  TARGETS joint_state_node
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+target_include_directories(joint_state_node
+  PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>
+)
+
+
+add_executable(controller_communication src/controller_communication.cpp)
+ament_target_dependencies( controller_communication
+  rclcpp
+  std_msgs
+  sensor_msgs
+  std_srvs
+  yk400xe_interfaces
+)
+
+install(
+  TARGETS controller_communication
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+target_include_directories(controller_communication
+  PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>
+)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)

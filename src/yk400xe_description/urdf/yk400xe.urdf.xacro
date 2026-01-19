@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="yk400xe">
+    
+    <material name="white">
+        <color rgba="1.0 1.0 1.0 1"/>
+    </material>
+    <material name="black">
+        <color rgba="0.1 0.1 0.1 1"/>
+    </material>
+
+    <xacro:include filename="$(find yk400xe_description)/urdf/links.xacro" />
+    <xacro:include filename="$(find yk400xe_description)/urdf/joints.xacro" />
+
+</robot>

@@ -1,22 +1,19 @@
 <?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
-  <name>rcx340_bringup</name>
+  <name>yk400xe_control</name>
   <version>0.0.0</version>
-  <description>Package to do the bringup of the RCX3400 controller</description>
+  <description>TODO: Package description</description>
   <maintainer email="vboufaroua@gmail.com">vincent</maintainer>
-  <license>MIT</license>
+  <license>TODO: License declaration</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
 
-  <depend>rclcpp</depend>
-  <depend>std_msgs</depend>
-  <depend>sensor_msgs</depend>
-  <depend>std_srvs</depend>
   <depend>yk400xe_interfaces</depend>
+  <depend>geometry_msgs</depend>
 
   <export>
     <build_type>ament_cmake</build_type>

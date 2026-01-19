@@ -1,0 +1,4 @@
+float64[] position
+int8 speed
+---
+bool ok

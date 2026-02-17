@@ -6,14 +6,14 @@ from launch_ros.actions import Node
 import xacro
 
 def generate_launch_description():
-    bunker_unity_path = os.path.join(
+    pkg_path = os.path.join(
         get_package_share_directory('yk400xe_description'))
 
-    xacro_file = os.path.join(bunker_unity_path,
+    xacro_file = os.path.join(pkg_path,
                               'urdf',
                               'yk400xe.urdf.xacro')
     
-    urdf_path = os.path.join(bunker_unity_path, 'urdf', 'yk400xe.urdf')
+    urdf_path = os.path.join(pkg_path, 'urdf', 'yk400xe.urdf')
 
     doc = xacro.process_file(xacro_file)
 
@@ -31,6 +31,12 @@ def generate_launch_description():
         parameters=[params]
     )
 
+    rviz_node = Node(
+        package="rviz2",
+        executable='rviz2',
+    )
+
     return LaunchDescription([
         node_robot_state_publisher,
+        rviz_node
     ])

@@ -26,9 +26,9 @@
     <joint name="J3" type="prismatic">
         <parent link="L3"/>
         <child  link="L4_dummy"/>
-        <origin xyz="0 0.175 -0.068402" rpy="0 0 0"/>   <!-- check z TODO -->
+        <origin xyz="0 0.175 -0.063402" rpy="0 0 0"/> 
         <axis xyz="0 0 1"/>
-        <limit effort="1000.0" lower="-0.150" upper="0" velocity="0.5"/>    <!-- 0 - 150 mm in -z  -->
+        <limit effort="1000.0" lower="-0.150" upper="0.00875" velocity="0.5"/>    <!-- 0 - 150 mm in -z  -->
     </joint>
 
     <joint name="J4" type="revolute">

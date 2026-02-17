@@ -34,6 +34,7 @@ def generate_launch_description():
     rviz_node = Node(
         package="rviz2",
         executable='rviz2',
+        arguments=['-d', os.path.join(pkg_path, "rviz/rviz_config.rviz")],
     )
 
     return LaunchDescription([

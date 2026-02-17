@@ -12,10 +12,10 @@
     <xacro:include filename="$(find yk400xe_description)/urdf/joints.xacro" />
 
     <link name="std_coords_link"/>
-    <joint name="std_coords_joint">
-        <parent link="L1" type=fixed>
-        <child link="std_coords_link">
-        <origin xyz="0.0 0.0 0.0" rpy="0 0 0"/>  <!-- TODO z-->
-    <joint/>
+    <joint name="std_coords_joint" type="fixed">
+        <parent link="L1"/>
+        <child link="std_coords_link"/>
+        <origin xyz="0.0 0.0 0.125" rpy="0 0 0"/>  
+    </joint>
 
 </robot>

@@ -16,6 +16,7 @@ install(DIRECTORY
   config
   launch
   meshes
+  rviz
   DESTINATION share/${PROJECT_NAME}/)
 
 if(BUILD_TESTING)

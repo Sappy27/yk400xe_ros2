@@ -1,4 +1,0 @@
-geometry_msgs/Pose posexyz
-int8 speed
----
-bool ok

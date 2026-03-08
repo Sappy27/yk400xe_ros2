@@ -17,6 +17,13 @@ find_package(sensor_msgs REQUIRED)
 find_package(std_srvs REQUIRED)
 find_package(yk400xe_interfaces REQUIRED)
 
+
+install(DIRECTORY 
+  config
+  launch
+  DESTINATION share/${PROJECT_NAME}/)
+
+
 add_executable(joint_state_node src/joint_state_node.cpp)
 ament_target_dependencies( joint_state_node
   rclcpp

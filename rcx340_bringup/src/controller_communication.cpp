@@ -3,14 +3,18 @@
 #include "sensor_msgs/msg/joint_state.hpp"
 #include "std_msgs/msg/header.hpp"
 #include "geometry_msgs/msg/pose.hpp"
+#include "geometry_msgs/msg/pose_stamped.hpp"
 
 #include "std_srvs/srv/empty.hpp"
 #include "std_srvs/srv/set_bool.hpp"
-#include "yk400xe_interfaces/srv/movep_xy.hpp"
-#include "yk400xe_interfaces/srv/movep_joints.hpp"
+
+#include "yk400xe_interfaces/msg/move.hpp"
+#include "yk400xe_interfaces/srv/move_trajectory.hpp"
 
 #include "rcx340_bringup/telnet.hpp"
 #include "rcx340_bringup/errors.hpp"
+
+#include "rcx340_bringup/controller.hpp"
 
 #include <string>
 #include <vector>
@@ -25,13 +29,40 @@
 #include <iostream>
 
 class ControllerCom : public rclcpp::Node{
+    private:
+        rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr m_jointStatesPublisher;
+        rclcpp::TimerBase::SharedPtr m_jointStateTimer;
+        rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr m_efStatePublisher; 
+
+        std::string m_ip;
+        int m_port;
+
+        TelnetCommunication* m_telnet;
+        
+        std::vector<std::string> m_jointsNames;
+
+        std::deque<int> m_pendingCommands;
+
+        std::unordered_map<int, std::function<void(const std::string&)>> m_handlerMap;
+
+        Controller* m_controller;
+
+        rclcpp::Service<yk400xe_interfaces::srv::MoveTrajectory>::SharedPtr m_moveService;
+        rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr m_servoService;
+        rclcpp::Service<std_srvs::srv::Empty>::SharedPtr m_alarmResetService;
+
     public:
         ControllerCom() : 
             Node("controller_communication_node"){
             
             m_handlerMap = {
                 {1, [this](const std::string& s){handle_joints_state(s);}},
-                {2, [this](const std::string& s){handle_XY_state(s);}}
+                {2, [this](const std::string& s){handle_ef_state(s);}},
+                {3, [this](const std::string& s){handle_alarm_status(s);}},
+                {4, [this](const std::string& s){handle_mspeed_status(s);}},
+                {5, [this](const std::string& s){handle_return_to_origin_status(s);}},
+                {6, [this](const std::string& s){handle_motor_status(s);}},
+                {7, [this](const std::string& s){handle_servo_status(s);}}
             };
 
             this->declare_parameter<std::string>(
@@ -50,9 +81,10 @@ class ControllerCom : public rclcpp::Node{
                 // encoder min  encoder max   range min     range max
                     -385506,      380555,    -2.3038346,    2.3038346,
                     -437972,      439198,    -2.6179939,    2.6179939,
-                    -1707,        250000,           0.0,       -0.150,
-                    -245760,      245760,    -6.2831853,    6.2831853 
-                } // TODO Make symetrical values for 0 to be 0? TODO
+                    -1707,        250000,           0.0,       0.150,
+                    -245760,      245760,    -6.2831853,    6.2831853,
+                    -260.0,       450.0,     -6.2831853,    6.2831853
+                }
             );
 
             this->get_parameter("controller_ip",m_ip);
@@ -62,46 +94,24 @@ class ControllerCom : public rclcpp::Node{
             std::vector<double> flat;
             this->get_parameter("joints_ranges", flat);
 
-            m_jointsRanges.clear();
-            m_jointsRanges.reserve(flat.size() / 4);
-
-            for (size_t i = 0; i < flat.size(); i += 4) {
-            m_jointsRanges.push_back({
-                flat[i + 0],
-                flat[i + 1],
-                flat[i + 2],
-                flat[i + 3]
-            });
-            }
-
             m_jointStatesPublisher =
                 this->create_publisher<sensor_msgs::msg::JointState>(
                 "/joint_states", 10);
 
-            m_xyStatePublisher =
-                this->create_publisher<geometry_msgs::msg::Pose>(
-                "/xy_states", 10);
+            m_efStatePublisher =
+                this->create_publisher<geometry_msgs::msg::PoseStamped>(
+                "/ef_states", 10);
             
             // Service the send command in cartesian coordinates
-            m_movepxyService = this->create_service<yk400xe_interfaces::srv::MovepXY>(
-                "/command/moveP_xy",
-                std::bind(  &ControllerCom::handle_movepxy_service,
+            m_moveService = this->create_service<yk400xe_interfaces::srv::MoveTrajectory>(
+                "/command/move",
+                std::bind(  &ControllerCom::handle_move_service,
                             this,
                             std::placeholders::_1,
                             std::placeholders::_2
                         )
             );
 
-            // Service the send command in joints values
-            m_movepJointsService = this->create_service<yk400xe_interfaces::srv::MovepJoints>(
-                "/command/moveP_joints",
-                std::bind(  &ControllerCom::handle_movep_joints_service,
-                            this,
-                            std::placeholders::_1,
-                            std::placeholders::_2
-                        )
-            );
-            
             // Service to turn on/off the servos
             m_servoService = this->create_service<std_srvs::srv::SetBool>(
                 "/command/servo",
@@ -127,50 +137,22 @@ class ControllerCom : public rclcpp::Node{
                 std::bind(&ControllerCom::timer_callback, this)
             );
 
-            // Object to deal handle Telnet communication with the controller
-            m_telnet = new TelnetCommunication(m_ip, m_port,
+            m_controller = new Controller(m_ip,m_port,flat,
                 [this](const std::string& msg) {
                     this->process_message(msg);
-                }
+                });
+
+            RCLCPP_INFO(this->get_logger(), 
+                "Communication node started"
             );
-
-            m_telnet->start();
-
-            RCLCPP_INFO(this->get_logger(), "Communication node started");
-        }
-
-        ~ControllerCom(){
-            m_telnet->stop();
         }
 
     private:
-
-        rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr m_jointStatesPublisher;
-        rclcpp::TimerBase::SharedPtr m_jointStateTimer;
-        rclcpp::Publisher<geometry_msgs::msg::Pose>::SharedPtr m_xyStatePublisher; 
-
-        std::string m_ip;
-        int m_port;
-
-        TelnetCommunication* m_telnet;
-        
-        std::vector<std::string> m_jointsNames;
-        std::vector<std::vector<double>> m_jointsRanges;
-
-        std::deque<int> m_pendingCommands;
-
-        std::unordered_map<int, std::function<void(const std::string&)>> m_handlerMap;
-
-        rclcpp::Service<yk400xe_interfaces::srv::MovepXY>::SharedPtr m_movepxyService;
-        rclcpp::Service<yk400xe_interfaces::srv::MovepJoints>::SharedPtr m_movepJointsService;
-        rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr m_servoService;
-        rclcpp::Service<std_srvs::srv::Empty>::SharedPtr m_alarmResetService;
-
         // Reset alarm
         void handle_alarm_reset_service(
             const std::shared_ptr<std_srvs::srv::Empty::Request> /*request*/,
             std::shared_ptr<std_srvs::srv::Empty::Response> /*response*/){
-            m_telnet->send_command("@ALMRST");
+            m_controller->alarm_reset();
         }
 
         // Set the servos on/off
@@ -178,158 +160,67 @@ class ControllerCom : public rclcpp::Node{
             const std::shared_ptr<std_srvs::srv::SetBool::Request> request,
             std::shared_ptr<std_srvs::srv::SetBool::Response> /*response*/){
 
-            // Maybe add a check to see if servos are already on/off
             if(request->data){
                 RCLCPP_INFO(
                     this->get_logger(),
                     "Starting Servos"
                 );
-                m_telnet->send_command("@SERVO ON");
+                m_controller->servo_on();
             }
             else{
                 RCLCPP_INFO(
                     this->get_logger(),
                     "Stoping Servos"
                 );
-                m_telnet->send_command("@SERVO OFF");
+                m_controller->servo_off();
             }
         }
 
         // Send XY command to controller
-        void handle_movepxy_service(
-            const std::shared_ptr<yk400xe_interfaces::srv::MovepXY::Request> request,
-            std::shared_ptr<yk400xe_interfaces::srv::MovepXY::Response> /*response*/){
-                
-            std::vector<std::string> cmd_msgs;
-            float x,y,z,thz,s;
+        void handle_move_service(
+                const std::shared_ptr<yk400xe_interfaces::srv::MoveTrajectory::Request> request,
+                std::shared_ptr<yk400xe_interfaces::srv::MoveTrajectory::Response> /*response*/){
 
-            x = request->posexyz.position.x * 1000;
-            y = request->posexyz.position.y * 1000;
-            z = request->posexyz.position.z * 1000;
-            thz = request->posexyz.orientation.z;
-            s = request->speed;
+            if(true) // check if the mqnuql lock or servo off TODO
+                m_controller->move_trajectory(request->move_cmds);
 
             RCLCPP_INFO(
                 this->get_logger(),
-                "Received request: x=%.3f y=%.3f z=%.3f thz=%.3f speed=%.1f",
-                x, y, z, thz, s
+                "Received request Move request : %ld Point(s) trajectory",
+                request->move_cmds.size()
             );
-
-            std::string write_msg = "@WRITE P100";
-            std::string point_msg = "P100= "; 
-            std::string move_msg = "@MOVE P,P100,S=" ;
             
-            point_msg += std::to_string(x) + " ";
-            point_msg += std::to_string(y) + " ";
-            point_msg += std::to_string(z) + " ";
-            point_msg += std::to_string(thz)+ " 0.0 0.0";
-
-            move_msg += std::to_string(s);
-
-            cmd_msgs.push_back(write_msg);
-            cmd_msgs.push_back(point_msg);
-            cmd_msgs.push_back(move_msg);
-
-            m_telnet->send_command(cmd_msgs);
         }
 
-        // Send joint command to controller
-        void handle_movep_joints_service(
-            const std::shared_ptr<yk400xe_interfaces::srv::MovepJoints::Request> request,
-            std::shared_ptr<yk400xe_interfaces::srv::MovepJoints::Response> /*response*/){
-            
-            std::vector<std::string> cmd_msgs;
-            int s;
-            
-            std::vector<double> joint_states;
-            std::vector<int> joint_states_remaped;
-            joint_states.reserve(4);
-            joint_states_remaped.reserve(4);
-
-            joint_states.push_back(request->position[0]);
-            joint_states.push_back(request->position[1]);
-            joint_states.push_back(request->position[2]);
-            joint_states.push_back(request->position[3]);
-
-            joint_states_remaped = remap_to_joint_state(joint_states);
-            s = request->speed;
-            
-            RCLCPP_INFO(
-                this->get_logger(),
-                "Received request: j1=%d j2=%d j3=%d j4=%d speed=%d",
-                joint_states_remaped[0], joint_states_remaped[1], joint_states_remaped[2], joint_states_remaped[3], s
-            );
-
-            std::string write_msg = "@WRITE P100";
-            std::string point_msg = "P100= "; 
-            std::string move_msg = "@MOVE P,P100,S=" ;
-            
-            point_msg += std::to_string(joint_states_remaped[0]) + " ";
-            point_msg += std::to_string(joint_states_remaped[1]) + " ";
-            point_msg += std::to_string(-joint_states_remaped[2]) + " ";
-            point_msg += std::to_string(joint_states_remaped[3])+ " 0 0";
-
-            move_msg += std::to_string(s);
-
-            cmd_msgs.push_back(write_msg);
-            cmd_msgs.push_back(point_msg);
-            cmd_msgs.push_back(move_msg);
-
-            m_telnet->send_command(cmd_msgs);
-        }
-
-        // Send command to know joints States and end effectors
+        // Send command to get joints states and end effectors position
         void timer_callback(){
-            std::string cmdJoints = "@?WHERE";
-            std::string cmdXY = "@?WHRXY";
-            int cmdIDJoints = 1;
-            int cmdIDXY = 2;
+            m_controller->where();
+            m_pendingCommands.push_back(1);
 
-            m_pendingCommands.push_back(cmdIDJoints);
-            m_telnet->send_command(cmdJoints);
+            m_controller->where_xy();
+            m_pendingCommands.push_back(2);
 
-            m_pendingCommands.push_back(cmdIDXY);
-            m_telnet->send_command(cmdXY);
+            // m_controller->alarm_status();
+            // m_pendingCommands.push_front(3);
+
+            // m_controller->mspeed_status();
+            // m_pendingCommands.push_front(4);
+
+            // m_controller->return_to_origin_status();
+            // m_pendingCommands.push_front(5);
+
+            // m_controller->motor_status();
+            // m_pendingCommands.push_front(6);
+
+            // m_controller->servo_status();
+            // m_pendingCommands.push_front(7);
         }
 
-        // Remap joints state to cartesian coordinates 
-        std::vector<double> remap_from_joint_state(std::vector<int>& pos){
-            std::vector<double> remap_pos;
-            remap_pos.reserve(pos.size());
-
-            for (size_t i = 0; i<pos.size(); i++){
-                double a = (m_jointsRanges[i][2]-m_jointsRanges[i][3])
-                          /(m_jointsRanges[i][0]-m_jointsRanges[i][1]);
-                double remap_state = a * pos[i] 
-                    + (m_jointsRanges[i][2]-m_jointsRanges[i][0]*a);
-                remap_pos.push_back(remap_state);
-            }
-
-            return remap_pos;
-        }
-
-        // Remap cartesian coordinates to joints state
-        std::vector<int> remap_to_joint_state(const std::vector<double>& pos){
-            std::vector<int> remap_pos;
-            remap_pos.reserve(pos.size());
-
-            for (size_t i = 0; i < pos.size(); i++) {
-                double a = (m_jointsRanges[i][2] - m_jointsRanges[i][3])
-                          /(m_jointsRanges[i][0] - m_jointsRanges[i][1]);
-
-                double b = m_jointsRanges[i][2] - m_jointsRanges[i][0] * a;
-                double joint_state = (pos[i] - b) / a;
-
-                remap_pos.push_back(static_cast<int>(joint_state));
-            }
-
-            return remap_pos;
-        }
 
         void process_message(const std::string& msg){
             
             // Start or End of tasks, SETUP TODO
-            if (msg=="OK" ||    // Command tracking --> setup TODO
+            if (msg=="OK" ||
                 msg=="END" ||
                 msg=="BEGIN" ||
                 msg=="RUN" ||
@@ -355,14 +246,14 @@ class ControllerCom : public rclcpp::Node{
                 if (it != dict.end())
                     RCLCPP_ERROR(
                         this->get_logger(),
-                        "%s :  %s",
+                        "\033[38;5;202m%s :  %s\033[0m",
                         error_code.c_str(),
                         it->second.c_str()
                     );
                 else
                     RCLCPP_ERROR(
                         this->get_logger(),
-                        "Unknown error : %s",
+                        "\033[38;5;202mUnknown error : %s\033[0m",
                         error_code.c_str()
                     );
                 return;
@@ -387,8 +278,8 @@ class ControllerCom : public rclcpp::Node{
         
         // Function to parse and publish joints state
         void handle_joints_state(const std::string& mes){
-            std::vector<int> pulse_positions;
-            std::vector<double> ros_positions;
+            std::array<int,4> pulse_positions;
+            std::array<double,4> ros_positions;
 
             size_t pos ;
             size_t start = 0;
@@ -397,14 +288,15 @@ class ControllerCom : public rclcpp::Node{
                 pos = mes.find(' ',start);
                 std::string state = mes.substr(start, pos);
 
-                double value;
+                int value;
                 std::stringstream ss(state);
                 ss >> value;
-                pulse_positions.push_back(value);
+                pulse_positions[i] = value;
                 start = pos+1;
             }
 
-            ros_positions = remap_from_joint_state(pulse_positions);
+            ros_positions = m_controller->remap_from_pulse(pulse_positions);
+            std::vector<double> v(ros_positions.begin(), ros_positions.end());
 
             std_msgs::msg::Header header;
             header.stamp = this->now();
@@ -413,14 +305,14 @@ class ControllerCom : public rclcpp::Node{
             sensor_msgs::msg::JointState joint_state_msg;
             joint_state_msg.header=header;
             joint_state_msg.name=m_jointsNames;
-            joint_state_msg.position=ros_positions;
+            joint_state_msg.position=v;            
 
             m_jointStatesPublisher->publish(joint_state_msg);
         }
-
-        // Function to parse and publish XY states
-        void handle_XY_state(const std::string& mes){
-            std::vector<double> xyPositions;
+        
+        // Function to parse and publish end effector position
+        void handle_ef_state(const std::string& mes){
+            std::vector<double> efPositions;
 
             size_t pos ;
             size_t start = 0;
@@ -432,23 +324,77 @@ class ControllerCom : public rclcpp::Node{
                 double value;
                 std::stringstream ss(state);
                 ss >> value;
-                xyPositions.push_back(value);
+                efPositions.push_back(value);
                 start = pos+1;
             }
             
-            geometry_msgs::msg::Point xyPoint;
-            xyPoint.x = xyPositions[0];
-            xyPoint.y = xyPositions[1];
-            xyPoint.z = xyPositions[2];
+            geometry_msgs::msg::Point efPoint;
+            efPoint.x = efPositions[0];
+            efPoint.y = efPositions[1];
+            efPoint.z = efPositions[2];
 
-            geometry_msgs::msg::Quaternion xyQuaternion;
-            xyQuaternion.z = xyPositions[3];
+            geometry_msgs::msg::Quaternion efQuaternion;
+            efQuaternion.z = efPositions[3];
 
-            geometry_msgs::msg::Pose xyMsg;
-            xyMsg.position = xyPoint;
-            xyMsg.orientation = xyQuaternion;
+            std_msgs::msg::Header efHeader = std_msgs::msg::Header();
+            efHeader.frame_id = "std_coords_joint";
+            efHeader.stamp = rclcpp::Clock().now(); 
 
-            m_xyStatePublisher->publish(xyMsg);
+            geometry_msgs::msg::Pose efPose;
+            efPose.position = efPoint;
+            efPose.orientation = efQuaternion;
+
+            geometry_msgs::msg::PoseStamped efMsg;
+            efMsg.header = efHeader;
+            efMsg.pose = efPose;
+            
+
+            m_efStatePublisher->publish(efMsg);
+        }
+
+        // Function to handle alarm status
+        void handle_alarm_status(const std::string& /*mes*/){
+            //
+            // RCLCPP_INFO(
+                // this->get_logger(),
+                // "Received alarm status"
+            // );
+        }
+        
+        // Function to hangle mspeed status
+        void handle_mspeed_status(const std::string& /*mes*/){
+            //
+            // RCLCPP_INFO(
+                // this->get_logger(),
+                // "Received mspeed status"
+            // );
+        }
+
+        // Function to hangle return to origin status
+        void handle_return_to_origin_status(const std::string& /*mes*/){
+            //
+            // RCLCPP_INFO(
+                // this->get_logger(),
+                // "Received return to origin status"
+            // );
+        }
+
+        // Function to hangle motor status
+        void handle_motor_status(const std::string& /*mes*/){
+            //
+            // RCLCPP_INFO(
+                // this->get_logger(),
+                // "Received motor status"
+            // );
+        }
+
+        // Function to hangle servo status
+        void handle_servo_status(const std::string& /*mes*/){
+            //
+            // RCLCPP_INFO(
+                // this->get_logger(),
+                // "Received servo status"
+            // );
         }
 
 };

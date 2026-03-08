@@ -6,7 +6,8 @@ import sys
 import rclpy
 from rclpy.node import Node
 
-from yk400xe_interfaces.srv import MovepJoints
+from yk400xe_interfaces.srv import MoveTrajectory
+from yk400xe_interfaces.msg import Move
 
 from PyQt6.QtCore import Qt,QSize
 
@@ -45,13 +46,14 @@ ZMAX = 150 # mm
 THZMIN = -360 # deg
 THZMAX = 360 # deg
 
+
 # =============
 
 class CommandNode(Node):
     def __init__(self):
         super().__init__("command_gui_joints_node")
 
-        self.client = self.create_client(MovepJoints,"/command/moveP_joints")
+        self.client = self.create_client(MoveTrajectory,"/command/move")
         while not self.client.wait_for_service(timeout_sec=1.0):
             self.get_logger().info("Service not available, trying again")
         
@@ -64,16 +66,25 @@ class CommandNode(Node):
             s : int 
         ) -> None:
 
-        request = MovepJoints.Request()
+        request = MoveTrajectory.Request()
+        move = Move()
 
-        request.position = [
+        move.pose = [
             float(j1), 
             float(j2), 
             float(j3), 
             float(j4)
         ]
-        request.speed = int(s)
+
+        move.speed = int(s)
+        move.coords_type = 1 # pulses
+        move.move_type = 1 # P
+        # move.do_arch = 
+        # move.arch = 
+        # move.cont = 
         
+        request.move_cmds = [move]
+
         self.future = self.client.call_async(request)
 
 class RobotWorkspaceGraph:

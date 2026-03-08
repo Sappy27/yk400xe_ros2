@@ -7,7 +7,8 @@ import rclpy
 from rclpy.node import Node
 
 from geometry_msgs.msg import Pose
-from yk400xe_interfaces.srv import MovepXY
+from yk400xe_interfaces.srv import MoveTrajectory
+from yk400xe_interfaces.msg import Move
 
 from PyQt6.QtCore import Qt,QSize
 
@@ -39,13 +40,14 @@ ZMAX = 150 # mm
 
 THZMIN = -360 # deg
 THZMAX = 360 # deg
+
 # =============
 
 class CommandNode(Node):
     def __init__(self):
         super().__init__("command_gui_xy_node")
 
-        self.client = self.create_client(MovepXY,"/command/moveP_xy")
+        self.client = self.create_client(MoveTrajectory,"/command/move")
         while not self.client.wait_for_service(timeout_sec=1.0):
             self.get_logger().info("Service not available, trying again")
         
@@ -58,17 +60,22 @@ class CommandNode(Node):
             s : int 
         ) -> None:
 
-        request = MovepXY.Request()
-
-        rqst_pose = Pose()
-        rqst_pose.position.x = float(x)
-        rqst_pose.position.y = float(y)
-        rqst_pose.position.z = float(z)
-        rqst_pose.orientation.z = float(thz)
-
-        request.posexyz = rqst_pose
-        request.speed = int(s)
+        request = MoveTrajectory.Request()
+        move = Move()
+        move.pose = [
+                    float(x), 
+                    float(y), 
+                    float(z), 
+                    float(thz)*np.pi/180
+                ]
+        move.coords_type = 0 # std coords
+        move.move_type = 1 # P
+        move.speed = int(s)
+        # move.do_arch = 
+        # move.arch = 
+        # move.cont = 
         
+        request.move_cmds = [move]
         self.future = self.client.call_async(request)
 
 class RobotWorkspaceGraph:
@@ -226,7 +233,7 @@ class CommandGUI(QMainWindow):
         self.thetazLabel.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.thetazSldr = QSlider(Qt.Orientation.Vertical)
         self.thetazSldr.setFixedWidth(100)
-        self.thetazSldr.setRange(ZMIN,ZMAX)
+        self.thetazSldr.setRange(THZMIN,THZMAX)
         self.thetazSldr.setValue(0)
         self.thetazSldr.valueChanged.connect(
             lambda v :
@@ -281,7 +288,7 @@ class CommandGUI(QMainWindow):
         x,y = self.workspace.current
         if (x==None or y==None): return
         z = self.zSldr.value()/1000
-        thz = self.thetazSldr.value()*np.pi/180
+        thz = self.thetazSldr.value()
         s = self.speedSldr.value()
 
         self.node_.send_command(x,y,z,thz,s)

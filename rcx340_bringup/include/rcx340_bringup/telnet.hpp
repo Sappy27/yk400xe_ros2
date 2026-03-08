@@ -119,18 +119,21 @@ class TelnetCommunication{
             // Connect the socket to the endpoint
             asio::ip::tcp::endpoint m_endpoint(asio::ip::make_address(m_ip,m_ec), m_port);
             if (m_ec) {
-                std::cerr << "Invalid IP: " << m_ec.message() << std::endl;
+                std::cerr << "\033[31mInvalid IP: " 
+                    << m_ec.message() << "\033[0m" << std::endl;
                 return;
             }
 
             m_socket.connect(m_endpoint,m_ec);
 
             if (!m_ec){
-                std::cout << "Connected to the controller at : " << m_ip << ":" << m_port << std::endl;
+                std::cout << "\033[32mConnected to the controller at : " 
+                    << m_ip << ":" << m_port << "\033[0m" << std::endl;
                 read_data();
             }
             else{
-                std::cerr << "Failed to connect to the controller : " << m_ec.message() << std::endl;
+                std::cerr << "\033[31mFailed to connect to the controller : " 
+                    << m_ec.message() << "\033[0m" << std::endl;
             }
 
             

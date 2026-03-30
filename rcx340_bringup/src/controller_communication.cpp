@@ -2,6 +2,7 @@
 
 #include "sensor_msgs/msg/joint_state.hpp"
 #include "std_msgs/msg/header.hpp"
+#include "std_msgs/msg/string.hpp"
 #include "geometry_msgs/msg/pose.hpp"
 #include "geometry_msgs/msg/pose_stamped.hpp"
 
@@ -30,9 +31,12 @@
 
 class ControllerCom : public rclcpp::Node{
     private:
-        rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr m_jointStatesPublisher;
         rclcpp::TimerBase::SharedPtr m_jointStateTimer;
+        rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr m_jointStatesPublisher;
         rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr m_efStatePublisher; 
+
+        rclcpp::Publisher<std_msgs::msg::String>::SharedPtr m_errorPublisher; 
+
 
         std::string m_ip;
         int m_port;
@@ -100,7 +104,7 @@ class ControllerCom : public rclcpp::Node{
 
             m_efStatePublisher =
                 this->create_publisher<geometry_msgs::msg::PoseStamped>(
-                "/ef_states", 10);
+                "/ef_state", 10);
             
             // Service the send command in cartesian coordinates
             m_moveService = this->create_service<yk400xe_interfaces::srv::MoveTrajectory>(
@@ -329,9 +333,9 @@ class ControllerCom : public rclcpp::Node{
             }
             
             geometry_msgs::msg::Point efPoint;
-            efPoint.x = efPositions[0];
-            efPoint.y = efPositions[1];
-            efPoint.z = efPositions[2];
+            efPoint.x = efPositions[0]/1000;
+            efPoint.y = efPositions[1]/1000;
+            efPoint.z = -efPositions[2]/1000;
 
             geometry_msgs::msg::Quaternion efQuaternion;
             efQuaternion.z = efPositions[3];
@@ -353,48 +357,48 @@ class ControllerCom : public rclcpp::Node{
         }
 
         // Function to handle alarm status
-        void handle_alarm_status(const std::string& /*mes*/){
+        void handle_alarm_status(const std::string& mes){
             //
-            // RCLCPP_INFO(
-                // this->get_logger(),
-                // "Received alarm status"
-            // );
+            RCLCPP_INFO(
+                this->get_logger(),
+                mes.c_str()
+            );
         }
         
         // Function to hangle mspeed status
-        void handle_mspeed_status(const std::string& /*mes*/){
+        void handle_mspeed_status(const std::string& mes){
             //
-            // RCLCPP_INFO(
-                // this->get_logger(),
-                // "Received mspeed status"
-            // );
+            RCLCPP_INFO(
+                this->get_logger(),
+                mes.c_str()
+            );
         }
 
         // Function to hangle return to origin status
-        void handle_return_to_origin_status(const std::string& /*mes*/){
-            //
-            // RCLCPP_INFO(
-                // this->get_logger(),
-                // "Received return to origin status"
-            // );
+        void handle_return_to_origin_status(const std::string& mes){
+            
+            RCLCPP_INFO(
+                this->get_logger(),
+                mes.c_str()
+            );
         }
 
         // Function to hangle motor status
-        void handle_motor_status(const std::string& /*mes*/){
+        void handle_motor_status(const std::string& mes){
             //
-            // RCLCPP_INFO(
-                // this->get_logger(),
-                // "Received motor status"
-            // );
+            RCLCPP_INFO(
+                this->get_logger(),
+                mes.c_str()
+            );
         }
 
         // Function to hangle servo status
-        void handle_servo_status(const std::string& /*mes*/){
+        void handle_servo_status(const std::string& mes){
             //
-            // RCLCPP_INFO(
-                // this->get_logger(),
-                // "Received servo status"
-            // );
+            RCLCPP_INFO(
+                this->get_logger(),
+                mes.c_str()
+            );
         }
 
 };

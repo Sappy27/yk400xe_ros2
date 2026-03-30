@@ -24,25 +24,6 @@ install(DIRECTORY
   DESTINATION share/${PROJECT_NAME}/)
 
 
-add_executable(joint_state_node src/joint_state_node.cpp)
-ament_target_dependencies( joint_state_node
-  rclcpp
-  std_msgs
-  sensor_msgs
-)
-
-install(
-  TARGETS joint_state_node
-  DESTINATION lib/${PROJECT_NAME}
-)
-
-target_include_directories(joint_state_node
-  PUBLIC
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-    $<INSTALL_INTERFACE:include>
-)
-
-
 add_executable(controller_communication src/controller_communication.cpp)
 ament_target_dependencies( controller_communication
   rclcpp

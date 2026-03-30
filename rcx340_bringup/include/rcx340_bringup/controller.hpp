@@ -272,14 +272,14 @@ class Controller{
       cmd_msg.push_back("PGN=1"); 
 
       int i = 0;
-      
+      int pi = 0;
       while(i<int(moveCmd.size())){
         auto& mi = moveCmd[i];
         
         if(mi.coords_type==0){  // Std Coordinates
           std::array<double,4> pose = mi.pose;
 
-          std::string line = "P"+std::to_string(100+i)+"=";
+          std::string line = "P"+std::to_string(100+pi)+"=";
           line += std::to_string(pose[0] * 1000) + " ";
           line += std::to_string(pose[1] * 1000) + " ";
           line += std::to_string(pose[2] * 1000) + " ";
@@ -289,22 +289,21 @@ class Controller{
           if(mi.move_type==3){
             std::array<double,4> pose2 = mi.pose2;
             line.erase();
-            i++;
-            line = "P"+std::to_string(100+i)+"=";
+            pi++;
+            line = "P"+std::to_string(100+pi)+"=";
             line += std::to_string(pose2[0] * 1000) + " ";
             line += std::to_string(pose2[1] * 1000) + " ";
             line += std::to_string(pose2[2] * 1000) + " ";
-            line += std::to_string(remap_j4_std_coord(pose[3])) + " 0.0 0.0";
+            line += std::to_string(remap_j4_std_coord(pose2[3])) + " 0.0 0.0";
             cmd_msg.push_back(line);
           }
-          
+          pi++;
           i++;
         }
         else {  // Pulses
-          while(i<int(moveCmd.size())){
             std::array<int,4> pose_pulse = remap_to_pulse(mi.pose);
 
-            std::string line = "P"+std::to_string(100+i)+"=";
+            std::string line = "P"+std::to_string(100+pi)+"=";
             line += std::to_string(pose_pulse[0]) + " ";
             line += std::to_string(pose_pulse[1]) + " ";
             line += std::to_string(pose_pulse[2]) + " ";
@@ -315,38 +314,39 @@ class Controller{
               std::array<int,4> pose2_pulse = remap_to_pulse(mi.pose2);
 
               line.erase();
-              i++;
-              line = "P"+std::to_string(100+i)+"=";
+              pi++;
+              line = "P"+std::to_string(100+pi)+"=";
               line += std::to_string(pose2_pulse[0]) + " ";
               line += std::to_string(pose2_pulse[1]) + " ";
               line += std::to_string(pose2_pulse[2]) + " ";
               line += std::to_string(pose2_pulse[3]) + " 0 0";
               cmd_msg.push_back(line);
             }
-            
+            pi++;
             i++;
-          }
         }
       }
 
-      i=0;
+      i = 0;
+      pi = 0;
       while(i<int(moveCmd.size())){
         std::string line = "MOVE";
         auto& mi = moveCmd[i];
         switch(mi.move_type){
-          default:
           case 1: 
-            line+=" P,P" + std::to_string(100+i);
+            line+=" P,P" + std::to_string(100+pi);
             break;
           case 2: 
-            line+=" L,P" + std::to_string(100+i);
+            line+=" L,P" + std::to_string(100+pi);
             break;
           case 3: 
-            line+=" C,P" + std::to_string(100+i) + "P" + std::to_string(100+i+1);
-            i++;
+            line+=" C,P" + std::to_string(100+pi) + ",P" + std::to_string(100+pi+1);
+            pi++;
             break;
           case 4: 
-            line+="I,P" + std::to_string(100+i);
+            line+="I,P" + std::to_string(100+pi);
+            break;
+          default:
             break;
         }
 
@@ -365,9 +365,9 @@ class Controller{
         }
 
         if(mi.do_arch && mi.move_type==1){
-          line+=",A3=" + std::to_string(mi.arch[0]);
-          line+="{" + std::to_string(mi.arch[1]) + 
-                      std::to_string(mi.arch[2]) + "}";
+          line+=",A3=" + std::to_string(mi.arch[0]*1000);
+          line+="{" + std::to_string(mi.arch[1]*1000) + ","
+                    + std::to_string(mi.arch[2]*1000) + "}";
         }
 
         if(mi.cont){
@@ -375,9 +375,12 @@ class Controller{
         }
 
         i++;
+        pi++;
         cmd_msg.push_back(line);
+        if(mi.wait_arm) cmd_msg.push_back("WAIT ARM");
       }
 
+      cmd_msg.push_back("END");
       cmd_msg.push_back("");
       cmd_msg.push_back("@LOAD <TRAJ_PG>,T1");
       cmd_msg.push_back("@RUN T1");

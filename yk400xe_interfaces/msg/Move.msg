@@ -11,3 +11,5 @@ float64[3] arch  # 3 element : [0]=height of the arch z direction, [1]&[2] width
 
 bool cont        # cont parameter (start next move as soon as cont distance to goal is reached)
 
+bool wait_arm    # wait_arm parameter (wait for the arm to reach the desired position) 
+

@@ -287,7 +287,7 @@ class CommandGUI(QMainWindow):
     def send(self) -> None :
         x,y = self.workspace.current
         if (x==None or y==None): return
-        z = self.zSldr.value()/1000
+        z = -self.zSldr.value()/1000
         thz = self.thetazSldr.value()
         s = self.speedSldr.value()
 

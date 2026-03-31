@@ -21,7 +21,7 @@
 #include <vector>
 #include <algorithm>
 #include <math.h>
-#include <deque>
+#include <queue>
 #include <unordered_map>
 #include <functional>
 #include <chrono>
@@ -37,7 +37,6 @@ class ControllerCom : public rclcpp::Node{
 
         rclcpp::Publisher<std_msgs::msg::String>::SharedPtr m_errorPublisher; 
 
-
         std::string m_ip;
         int m_port;
 
@@ -45,7 +44,10 @@ class ControllerCom : public rclcpp::Node{
         
         std::vector<std::string> m_jointsNames;
 
-        std::deque<int> m_pendingCommands;
+        std::queue<int> m_pendingCommands;
+
+        bool m_busy;
+        std::queue<std::shared_ptr<yk400xe_interfaces::srv::MoveTrajectory::Request>> m_pendingMoveCommands;
 
         std::unordered_map<int, std::function<void(const std::string&)>> m_handlerMap;
 
@@ -66,7 +68,8 @@ class ControllerCom : public rclcpp::Node{
                 {4, [this](const std::string& s){handle_mspeed_status(s);}},
                 {5, [this](const std::string& s){handle_return_to_origin_status(s);}},
                 {6, [this](const std::string& s){handle_motor_status(s);}},
-                {7, [this](const std::string& s){handle_servo_status(s);}}
+                {7, [this](const std::string& s){handle_servo_status(s);}},
+                {8, [this](const std::string& s){handle_task1_status(s);}}
             };
 
             this->declare_parameter<std::string>(
@@ -145,6 +148,8 @@ class ControllerCom : public rclcpp::Node{
                 [this](const std::string& msg) {
                     this->process_message(msg);
                 });
+            
+            m_busy = false;
 
             RCLCPP_INFO(this->get_logger(), 
                 "Communication node started"
@@ -180,50 +185,68 @@ class ControllerCom : public rclcpp::Node{
             }
         }
 
+        void processNextMoveCommand(){
+            if(m_pendingMoveCommands.empty()) return;
+
+            auto request = m_pendingMoveCommands.front();
+            m_pendingMoveCommands.pop();
+
+            m_busy = true;
+            m_controller->move_trajectory(request->move_cmds);
+        }
+
         // Send XY command to controller
         void handle_move_service(
                 const std::shared_ptr<yk400xe_interfaces::srv::MoveTrajectory::Request> request,
                 std::shared_ptr<yk400xe_interfaces::srv::MoveTrajectory::Response> /*response*/){
-
-            if(true) // check if the mqnuql lock or servo off TODO
-                m_controller->move_trajectory(request->move_cmds);
 
             RCLCPP_INFO(
                 this->get_logger(),
                 "Received request Move request : %ld Point(s) trajectory",
                 request->move_cmds.size()
             );
+
+            if (m_busy){
+                m_pendingMoveCommands.push(request);
+            }
+            else{
+                m_controller->move_trajectory(request->move_cmds);
+            }
             
         }
 
         // Send command to get joints states and end effectors position
         void timer_callback(){
+            
             m_controller->where();
-            m_pendingCommands.push_back(1);
+            m_pendingCommands.push(1);
 
             m_controller->where_xy();
-            m_pendingCommands.push_back(2);
+            m_pendingCommands.push(2);
 
             // m_controller->alarm_status();
-            // m_pendingCommands.push_front(3);
+            // m_pendingCommands.push(3);
 
             // m_controller->mspeed_status();
-            // m_pendingCommands.push_front(4);
+            // m_pendingCommands.push(4);
 
             // m_controller->return_to_origin_status();
-            // m_pendingCommands.push_front(5);
+            // m_pendingCommands.push(5);
 
             // m_controller->motor_status();
-            // m_pendingCommands.push_front(6);
+            // m_pendingCommands.push(6);
 
             // m_controller->servo_status();
-            // m_pendingCommands.push_front(7);
+            // m_pendingCommands.push(7);
+
+            m_controller->task1_status();
+            m_pendingCommands.push(8);
         }
 
 
         void process_message(const std::string& msg){
             
-            // Start or End of tasks, SETUP TODO
+            // Skipping messages
             if (msg=="OK" ||
                 msg=="END" ||
                 msg=="BEGIN" ||
@@ -232,7 +255,7 @@ class ControllerCom : public rclcpp::Node{
                 msg.empty()) return;
             
             // Welcome message
-            if (msg[0]=='W'){
+            else if (msg[0]=='W'){
                 RCLCPP_INFO(
                     this->get_logger(), 
                     "\033[32m%s\033[0m",
@@ -242,7 +265,7 @@ class ControllerCom : public rclcpp::Node{
             }
 
             // Errors handling using the dictionnary from errors.hpp
-            if (msg[0]=='N'){
+            else if (msg[0]=='N'){
                 std::string error_code = msg.substr(3);
                 const auto& dict = errorDictionary();
 
@@ -275,7 +298,7 @@ class ControllerCom : public rclcpp::Node{
             
 
             int cmdID = m_pendingCommands.front();
-            m_pendingCommands.pop_front();  
+            m_pendingCommands.pop();  
 
             m_handlerMap[cmdID](msg);
         }
@@ -399,6 +422,18 @@ class ControllerCom : public rclcpp::Node{
                 this->get_logger(),
                 mes.c_str()
             );
+        }
+
+        void handle_task1_status(const std::string& mes){
+            size_t first = mes.find(',');
+            size_t second = mes.find(',', first + 1);
+
+
+            if(mes[second+1]=='S' && m_busy) {
+                m_busy = false;
+                processNextMoveCommand();
+            }
+            else if(mes[second+1]=='R' && !m_busy) m_busy = true;
         }
 
 };

@@ -8,7 +8,7 @@
 #include <vector>
 #include <thread>
 #include <array>
-#include <deque>
+#include <queue>
 #include <functional>
 
 #include <asio.hpp>
@@ -58,7 +58,7 @@ class TelnetCommunication{
 
             asio::post(m_strand, [this, cmd = std::move(command)]() mutable {
                 bool idle = m_pendingCommands.empty();
-                m_pendingCommands.push_back(std::move(cmd));
+                m_pendingCommands.push(std::move(cmd));
 
                 if (idle) {
                     write_data();
@@ -82,7 +82,7 @@ class TelnetCommunication{
                 bool idle = m_pendingCommands.empty();
 
                 for (auto& cmd : batch) {
-                    m_pendingCommands.push_back(std::move(cmd));
+                    m_pendingCommands.push(std::move(cmd));
                 }
 
                 if (idle) {
@@ -109,7 +109,7 @@ class TelnetCommunication{
         std::array<char, 4096> m_readBuffer; // Buffer for reading
         std::string m_rxBuffer; // Buffer for lines
 
-        std::deque<std::string> m_pendingCommands; // deque to store the pending commands
+        std::queue<std::string> m_pendingCommands; // queue to store the pending commands
 
         std::function<void(const std::string&)> m_lineCallback;
 
@@ -205,7 +205,7 @@ class TelnetCommunication{
                 return;
             }
 
-            // Grab the first command in the deque
+            // Grab the first command in the queue
             const std::string& msg = m_pendingCommands.front();
 
             // Write the message asynchronously on the context thread
@@ -216,8 +216,8 @@ class TelnetCommunication{
                         std::cerr << "Error while writing : " << ec.message() << std::endl;
                     }
 
-                    // Pop the command from the deque 
-                    m_pendingCommands.pop_front();
+                    // Pop the command from the queue 
+                    m_pendingCommands.pop();
 
                     if (!m_pendingCommands.empty()){
                         // Continue writing

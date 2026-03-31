@@ -8,8 +8,6 @@
 
 #include <string>
 #include <functional>
-#include <deque>
-#include <deque>
 #include <vector>
 
 
@@ -88,6 +86,11 @@ class Controller{
 
     void servo_status(){
       std::string cmd = "@?SERVO";
+      m_telnet->send_command(cmd);
+    }
+
+    void task1_status(){
+      std::string cmd = "@?TSKMON T1";
       m_telnet->send_command(cmd);
     }
 
@@ -282,7 +285,7 @@ class Controller{
           std::string line = "P"+std::to_string(100+pi)+"=";
           line += std::to_string(pose[0] * 1000) + " ";
           line += std::to_string(pose[1] * 1000) + " ";
-          line += std::to_string(pose[2] * 1000) + " ";
+          line += std::to_string(-pose[2] * 1000) + " ";
           line += std::to_string(remap_j4_std_coord(pose[3])) + " 0.0 0.0";
           cmd_msg.push_back(line);
 
@@ -293,7 +296,7 @@ class Controller{
             line = "P"+std::to_string(100+pi)+"=";
             line += std::to_string(pose2[0] * 1000) + " ";
             line += std::to_string(pose2[1] * 1000) + " ";
-            line += std::to_string(pose2[2] * 1000) + " ";
+            line += std::to_string(-pose2[2] * 1000) + " ";
             line += std::to_string(remap_j4_std_coord(pose2[3])) + " 0.0 0.0";
             cmd_msg.push_back(line);
           }

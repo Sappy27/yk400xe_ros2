@@ -368,7 +368,7 @@ class Controller{
         }
 
         if(mi.do_arch && mi.move_type==1){
-          line+=",A3=" + std::to_string(mi.arch[0]*1000);
+          line+=",A3=" + std::to_string(-mi.arch[0]*1000);
           line+="{" + std::to_string(mi.arch[1]*1000) + ","
                     + std::to_string(mi.arch[2]*1000) + "}";
         }

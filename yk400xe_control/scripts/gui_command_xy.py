@@ -10,9 +10,9 @@ from geometry_msgs.msg import Pose
 from yk400xe_interfaces.srv import MoveTrajectory
 from yk400xe_interfaces.msg import Move
 
-from PyQt6.QtCore import Qt,QSize
+from PyQt5.QtCore import Qt,QSize
 
-from PyQt6.QtWidgets import (QWidget,QSlider,QPushButton, QMainWindow,
+from PyQt5.QtWidgets import (QWidget,QSlider,QPushButton, QMainWindow,
                              QGridLayout,QLabel,QLayout,QApplication,
                              QHBoxLayout,QVBoxLayout)
 

@@ -3,6 +3,9 @@
 #include "sensor_msgs/msg/joint_state.hpp"
 #include "std_msgs/msg/header.hpp"
 #include "std_msgs/msg/string.hpp"
+#include "std_msgs/msg/int8.hpp"
+#include "std_msgs/msg/int8_multi_array.hpp"
+#include "std_msgs/msg/bool.hpp"
 #include "geometry_msgs/msg/pose.hpp"
 #include "geometry_msgs/msg/pose_stamped.hpp"
 
@@ -19,15 +22,11 @@
 
 #include <string>
 #include <vector>
-#include <algorithm>
-#include <math.h>
 #include <queue>
 #include <unordered_map>
 #include <functional>
 #include <chrono>
 #include <sstream>
-
-#include <iostream>
 
 class ControllerCom : public rclcpp::Node{
     private:
@@ -35,14 +34,20 @@ class ControllerCom : public rclcpp::Node{
         rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr m_jointStatesPublisher;
         rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr m_efStatePublisher; 
 
-        rclcpp::Publisher<std_msgs::msg::String>::SharedPtr m_errorPublisher; 
+        rclcpp::Publisher<std_msgs::msg::String>::SharedPtr m_alarmStatusPublisher; 
+        rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr m_emergencyStatusPublisher; 
+        rclcpp::Publisher<std_msgs::msg::Int8>::SharedPtr m_mspeedStatusPublisher; 
+        rclcpp::Publisher<std_msgs::msg::Int8MultiArray>::SharedPtr m_returnToOriginStatusPublisher; 
+        rclcpp::Publisher<std_msgs::msg::Int8>::SharedPtr m_motorStatusPublisher; 
+        rclcpp::Publisher<std_msgs::msg::Int8MultiArray>::SharedPtr m_servoStatusPublisher; 
+        rclcpp::Publisher<std_msgs::msg::Int8>::SharedPtr m_modeStatusPublisher; 
 
         std::string m_ip;
         int m_port;
+        std::vector<std::string> m_jointsNames;
+        double m_j4_offset;
 
         TelnetCommunication* m_telnet;
-        
-        std::vector<std::string> m_jointsNames;
 
         std::queue<int> m_pendingCommands;
 
@@ -69,7 +74,10 @@ class ControllerCom : public rclcpp::Node{
                 {5, [this](const std::string& s){handle_return_to_origin_status(s);}},
                 {6, [this](const std::string& s){handle_motor_status(s);}},
                 {7, [this](const std::string& s){handle_servo_status(s);}},
-                {8, [this](const std::string& s){handle_task1_status(s);}}
+                {8, [this](const std::string& s){handle_task1_status(s);}},
+                {9, [this](const std::string& s){handle_mode_status(s);}},
+                {10, [this](const std::string& s){handle_emergency_status(s);}}
+
             };
 
             this->declare_parameter<std::string>(
@@ -82,24 +90,13 @@ class ControllerCom : public rclcpp::Node{
                 "joints_names", 
                 std::vector<std::string>{"J1","J2","J3","J4"});
 
-           this->declare_parameter<std::vector<double>>(
-                "joints_ranges",
-                {   
-                // encoder min  encoder max   range min     range max
-                    -385506,      380555,    -2.3038346,    2.3038346,
-                    -437972,      439198,    -2.6179939,    2.6179939,
-                    -1707,        250000,           0.0,       0.150,
-                    -245760,      245760,    -6.2831853,    6.2831853,
-                    -260.0,       450.0,     -6.2831853,    6.2831853
-                }
-            );
+            this->declare_parameter<double>(
+                "j4_offset",100.0);
 
             this->get_parameter("controller_ip",m_ip);
             this->get_parameter("controller_port",m_port);
             this->get_parameter("joints_names",m_jointsNames);
-
-            std::vector<double> flat;
-            this->get_parameter("joints_ranges", flat);
+            this->get_parameter("j4_offset",m_j4_offset);
 
             m_jointStatesPublisher =
                 this->create_publisher<sensor_msgs::msg::JointState>(
@@ -107,7 +104,35 @@ class ControllerCom : public rclcpp::Node{
 
             m_efStatePublisher =
                 this->create_publisher<geometry_msgs::msg::PoseStamped>(
-                "/ef_state", 10);
+                "/ee_state", 10);
+
+            m_alarmStatusPublisher =
+                this->create_publisher<std_msgs::msg::String>(
+                "/status/alarm", 10);
+
+            m_emergencyStatusPublisher =
+                this->create_publisher<std_msgs::msg::Bool>(
+                "/status/emergency_stop", 10);
+
+            m_mspeedStatusPublisher =
+                this->create_publisher<std_msgs::msg::Int8>(
+                "/status/mspeed", 10);
+
+            m_returnToOriginStatusPublisher =
+                this->create_publisher<std_msgs::msg::Int8MultiArray>(
+                "/status/return_to_origin", 10);
+
+            m_motorStatusPublisher =
+                this->create_publisher<std_msgs::msg::Int8>(
+                "/status/motor", 10);
+
+            m_servoStatusPublisher =
+                this->create_publisher<std_msgs::msg::Int8MultiArray>(
+                "/status/servo", 10);
+
+            m_modeStatusPublisher =
+                this->create_publisher<std_msgs::msg::Int8>(
+                "/status/mode", 10);
             
             // Service the send command in cartesian coordinates
             m_moveService = this->create_service<yk400xe_interfaces::srv::MoveTrajectory>(
@@ -144,7 +169,7 @@ class ControllerCom : public rclcpp::Node{
                 std::bind(&ControllerCom::timer_callback, this)
             );
 
-            m_controller = new Controller(m_ip,m_port,flat,
+            m_controller = new Controller(m_ip,m_port,m_j4_offset,
                 [this](const std::string& msg) {
                     this->process_message(msg);
                 });
@@ -168,7 +193,7 @@ class ControllerCom : public rclcpp::Node{
         void handle_set_servo_service(
             const std::shared_ptr<std_srvs::srv::SetBool::Request> request,
             std::shared_ptr<std_srvs::srv::SetBool::Response> /*response*/){
-
+            
             if(request->data){
                 RCLCPP_INFO(
                     this->get_logger(),
@@ -224,38 +249,36 @@ class ControllerCom : public rclcpp::Node{
             m_controller->where_xy();
             m_pendingCommands.push(2);
 
-            // m_controller->alarm_status();
-            // m_pendingCommands.push(3);
+            m_controller->alarm_status();
+            m_pendingCommands.push(3);
 
-            // m_controller->mspeed_status();
-            // m_pendingCommands.push(4);
+            m_controller->mspeed_status();
+            m_pendingCommands.push(4);
 
-            // m_controller->return_to_origin_status();
-            // m_pendingCommands.push(5);
+            m_controller->return_to_origin_status();
+            m_pendingCommands.push(5);
 
-            // m_controller->motor_status();
-            // m_pendingCommands.push(6);
+            m_controller->motor_status();
+            m_pendingCommands.push(6);
 
-            // m_controller->servo_status();
-            // m_pendingCommands.push(7);
+            m_controller->servo_status();
+            m_pendingCommands.push(7);
 
             m_controller->task1_status();
             m_pendingCommands.push(8);
+
+            m_controller->mode_status();
+            m_pendingCommands.push(9);
+
+            m_controller->emergency_status();
+            m_pendingCommands.push(10);
         }
 
 
         void process_message(const std::string& msg){
             
-            // Skipping messages
-            if (msg=="OK" ||
-                msg=="END" ||
-                msg=="BEGIN" ||
-                msg=="RUN" ||
-                msg=="READY" ||
-                msg.empty()) return;
-            
-            // Welcome message
-            else if (msg[0]=='W'){
+            // Display welcome message
+            if (msg[0]=='W'){
                 RCLCPP_INFO(
                     this->get_logger(), 
                     "\033[32m%s\033[0m",
@@ -264,6 +287,16 @@ class ControllerCom : public rclcpp::Node{
                 return;
             }
 
+            // Skipping messages
+            else if (msg=="OK" ||
+                msg=="END" ||
+                msg=="BEGIN" ||
+                msg=="RUN" ||
+                msg=="READY" ||
+                msg.empty()
+            ) return;
+            
+            
             // Errors handling using the dictionnary from errors.hpp
             else if (msg[0]=='N'){
                 std::string error_code = msg.substr(3);
@@ -296,7 +329,7 @@ class ControllerCom : public rclcpp::Node{
                 return;
             }
             
-
+            // Response to a pending command, handle it
             int cmdID = m_pendingCommands.front();
             m_pendingCommands.pop();  
 
@@ -380,50 +413,110 @@ class ControllerCom : public rclcpp::Node{
         }
 
         // Function to handle alarm status
+        // gg.bb (list in errors.hpp)
         void handle_alarm_status(const std::string& mes){
-            //
-            RCLCPP_INFO(
-                this->get_logger(),
-                mes.c_str()
-            );
+            std::string error_txt;
+            const auto& dict = errorDictionary();
+
+            auto it = dict.find(mes);
+            if (it != dict.end())
+                error_txt = it->second.c_str();
+                
+            auto msg = std_msgs::msg::String();
+            msg.data = mes + " : " + error_txt;
+
+            m_alarmStatusPublisher->publish(msg);
+        }
+
+        // Function to handle alarm status
+        // 0 - Normal operation
+        // 1 - Emergency stop on
+        void handle_emergency_status(const std::string& mes){
+
+            auto msg = std_msgs::msg::Bool();
+
+            if(mes[0] == '0') msg.data = false;
+            else msg.data = true;
+
+            m_emergencyStatusPublisher->publish(msg);
         }
         
         // Function to hangle mspeed status
+        // m   --> 1 to 100 %
         void handle_mspeed_status(const std::string& mes){
-            //
-            RCLCPP_INFO(
-                this->get_logger(),
-                mes.c_str()
-            );
+
+            auto msg = std_msgs::msg::Int8();
+            
+            msg.data = static_cast<int8_t>(std::stoi(mes));
+
+            m_mspeedStatusPublisher->publish(msg);
         }
 
         // Function to hangle return to origin status
+        // all 1,2,3,4,5,6 but we ignore 5 and 6
         void handle_return_to_origin_status(const std::string& mes){
+
+            auto msg = std_msgs::msg::Int8MultiArray();
             
-            RCLCPP_INFO(
-                this->get_logger(),
-                mes.c_str()
-            );
+            msg.data = {
+                static_cast<int8_t>(mes[0]-'0'), 
+                static_cast<int8_t>(mes[2]-'0'), 
+                static_cast<int8_t>(mes[4]-'0'), 
+                static_cast<int8_t>(mes[6]-'0'), 
+                static_cast<int8_t>(mes[8]-'0')
+            };
+
+            m_returnToOriginStatusPublisher->publish(msg);
         }
 
         // Function to hangle motor status
+        //  0 : Motor power off status
+        //  1 : Motor power on status
+        //  2 : Motor power on status + all servo on
         void handle_motor_status(const std::string& mes){
-            //
-            RCLCPP_INFO(
-                this->get_logger(),
-                mes.c_str()
-            );
+            auto msg = std_msgs::msg::Int8();
+            
+            msg.data = static_cast<int8_t>(mes[0]-'0');
+
+            m_motorStatusPublisher->publish(msg);
         }
 
         // Function to hangle servo status
+        // all 1,2,3,4,5,6 but we ignore 5 and 6
         void handle_servo_status(const std::string& mes){
-            //
-            RCLCPP_INFO(
-                this->get_logger(),
-                mes.c_str()
-            );
+            auto msg = std_msgs::msg::Int8MultiArray();
+            
+            msg.data = {
+                static_cast<int8_t>(mes[0]-'0'), 
+                static_cast<int8_t>(mes[2]-'0'), 
+                static_cast<int8_t>(mes[4]-'0'), 
+                static_cast<int8_t>(mes[6]-'0'), 
+                static_cast<int8_t>(mes[8]-'0')
+            };
+
+            m_servoStatusPublisher->publish(msg);
         }
 
+        // Function to hangle mode status
+        //  0 : MANUAL MODE --> FBX ONLY
+        //  1 : AUTO MODE --> Control source : Programming Box
+        //  2 : AUTO MODE --> Control source release
+        // -1 : RESTRICTED MODE 
+        void handle_mode_status(const std::string& mes){
+            auto msg = std_msgs::msg::Int8();
+            
+            msg.data = static_cast<int8_t>(std::stoi(mes));
+
+            m_modeStatusPublisher->publish(msg);
+        }
+
+        // Function to check status of MoveTraj task
+        // to know if the robot is busy
+        // m,n,f,p
+        // m : Execution programm number --> 1 to 100  [NOT USED]
+        // n : Task execution line number --> 1 to 9999 [NOT USED]
+        // f : task status --> R:RUN / U:SUSPEND / S:STOP / W:WAIT
+        // p : Priority level --> 17 to 47 [NOT USED]
         void handle_task1_status(const std::string& mes){
             size_t first = mes.find(',');
             size_t second = mes.find(',', first + 1);

@@ -9,32 +9,41 @@
 #include <string>
 #include <functional>
 #include <vector>
+#include <math.h>
 
 
 class Controller{
 
   private:
+  // This value can be found in the YK Serie Data sheet 
+    const std::vector<double> m_from_pulse_conversion_gain {
+      2*M_PI/1024000.0,
+      2*M_PI/1024000.0,
+      0.012/20480.0,
+      2*M_PI/245760.0
+    };
+
+    const std::vector<double> m_to_pulse_conversion_gain {
+      1024000.0/2*M_PI,
+      1024000.0/2*M_PI,
+      20480.0/0.012,
+      245760.0/2*M_PI
+    };
+
+    double m_j4_offset;
+
     TelnetCommunication* m_telnet;
     std::function<void(const std::string& msg)> m_msg_cb;
-    std::vector<std::vector<double>> m_jointsRanges;
 
   public:
-    Controller(std::string ip, int port, 
-        std::vector<double> flat,
-        std::function<void(const std::string& msg)> cb = nullptr)
-        : m_msg_cb(std::move(cb))  {
-
-      m_jointsRanges.clear();
-      m_jointsRanges.reserve(flat.size() / 4);
-
-      for (size_t i = 0; i < flat.size(); i += 4) {
-      m_jointsRanges.push_back({
-        flat[i + 0],
-        flat[i + 1],
-        flat[i + 2],
-        flat[i + 3]
-      });
-      }
+    Controller(
+      std::string ip, 
+      int port, 
+      double j4_offset = 0,
+      std::function<void(const std::string& msg)> cb = nullptr
+    )
+    : m_j4_offset(j4_offset), 
+      m_msg_cb(std::move(cb)) {
 
       // Object to deal handle Telnet communication with the controller
       m_telnet = new TelnetCommunication(ip, port,
@@ -65,6 +74,11 @@ class Controller{
     }
 
     void alarm_status(){
+      std::string cmd = "@?ALM";
+      m_telnet->send_command(cmd);
+    }
+
+    void emergency_status(){
       std::string cmd = "@?EMG";
       m_telnet->send_command(cmd);
     }
@@ -75,7 +89,7 @@ class Controller{
     }
 
     void return_to_origin_status(){
-      std::string cmd = "@?ORIGIN";
+      std::string cmd = "@?ORIGIN 1";
       m_telnet->send_command(cmd);
     }
 
@@ -86,6 +100,11 @@ class Controller{
 
     void servo_status(){
       std::string cmd = "@?SERVO";
+      m_telnet->send_command(cmd);
+    }
+
+    void mode_status(){
+      std::string cmd = "@?MODE";
       m_telnet->send_command(cmd);
     }
 
@@ -229,11 +248,7 @@ class Controller{
         std::array<double,4> remap_pos;
 
         for (size_t i = 0; i<pos.size(); i++){
-            double a = (m_jointsRanges[i][2]-m_jointsRanges[i][3])
-                      /(m_jointsRanges[i][0]-m_jointsRanges[i][1]);
-            double remap_state = a * pos[i] 
-                + (m_jointsRanges[i][2]-m_jointsRanges[i][0]*a);
-            remap_pos[i]=static_cast<double>(remap_state);
+            remap_pos[i]=static_cast<double>(pos[i]*m_from_pulse_conversion_gain[i]);
         }
 
         return remap_pos;
@@ -244,26 +259,15 @@ class Controller{
       std::array<int,4> remap_pos;
 
       for (size_t i = 0; i < pos.size(); i++) {
-        double a = (m_jointsRanges[i][2] - m_jointsRanges[i][3])
-                  /(m_jointsRanges[i][0] - m_jointsRanges[i][1]);
-
-        double b = m_jointsRanges[i][2] - m_jointsRanges[i][0] * a;
-        double joint_state = (pos[i] - b) / a;
-
-        remap_pos[i]=static_cast<int>(joint_state);
+        remap_pos[i]=static_cast<int>(pos[i]*m_to_pulse_conversion_gain[i]);
       }
 
       return remap_pos;
     }
 
     double remap_j4_std_coord(double j4){
-      double a = (m_jointsRanges[4][2] - m_jointsRanges[4][3])
-                /(m_jointsRanges[4][0] - m_jointsRanges[4][1]);
-
-      double b = m_jointsRanges[4][2] - m_jointsRanges[4][0] * a;
-      double joint_state = (j4 - b) / a;
-
-      return joint_state;
+      double remap_pos=static_cast<double>(180.0/M_PI*j4-m_j4_offset);
+      return remap_pos;
     }
 
     void move_trajectory(

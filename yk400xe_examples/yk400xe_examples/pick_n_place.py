@@ -49,8 +49,8 @@ class PickAndPlace(Node):
         x = msg.pose.position.x
         y = msg.pose.position.y
         z = msg.pose.position.z
-
-        self.ef_ = [float(x), float(y), float(z), 0.0]
+        thz = msg.pose.orientation.z
+        self.ef_ = [float(x), float(y), float(z), float(thz)]
 
 
     def input_loop(self):

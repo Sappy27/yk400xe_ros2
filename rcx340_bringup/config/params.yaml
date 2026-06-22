@@ -10,5 +10,3 @@ controller_communication_node:
       - "J2"
       - "J3"
       - "J4"
-
-    j4_offset: 100.0 # deg

@@ -81,7 +81,7 @@ source install/setub.bash
 Make sure the `Manual Lock` switch on the Programming Box is set to `OFF`. Otherwise, some commands will be rejected by the controller.  
 After sourcing your workspace (if not already done), run : 
 ```bash
-ros2 launch rcx340_bringup_bringup bringup.launch.py
+ros2 launch rcx340_bringup bringup.launch.py
 ```
 This command initializes the communication between the PC and the controller of the robot.  
 You should see a message saying, "Welcome to RCX340". If not, check the LAN connnection between the PC and the controller, and the Ethernet parameters of the computer.  

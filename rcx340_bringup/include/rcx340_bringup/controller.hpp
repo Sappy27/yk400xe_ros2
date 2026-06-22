@@ -15,22 +15,20 @@
 class Controller{
 
   private:
-  // This value can be found in the YK Serie Data sheet 
+  // These values can be found in the YK Serie Data sheet 
     const std::vector<double> m_from_pulse_conversion_gain {
-      2*M_PI/1024000.0,
-      2*M_PI/1024000.0,
+      (2*M_PI)/1024000.0,
+      (2*M_PI)/1024000.0,
       0.012/20480.0,
-      2*M_PI/245760.0
+      (2*M_PI)/245760.0
     };
 
     const std::vector<double> m_to_pulse_conversion_gain {
-      1024000.0/2*M_PI,
-      1024000.0/2*M_PI,
+      1024000.0/(2*M_PI),
+      1024000.0/(2*M_PI),
       20480.0/0.012,
-      245760.0/2*M_PI
+      245760.0/(2*M_PI)
     };
-
-    double m_j4_offset;
 
     TelnetCommunication* m_telnet;
     std::function<void(const std::string& msg)> m_msg_cb;
@@ -39,10 +37,9 @@ class Controller{
     Controller(
       std::string ip, 
       int port, 
-      double j4_offset = 0,
       std::function<void(const std::string& msg)> cb = nullptr
     )
-    : m_j4_offset(j4_offset), 
+    :
       m_msg_cb(std::move(cb)) {
 
       // Object to deal handle Telnet communication with the controller
@@ -265,9 +262,16 @@ class Controller{
       return remap_pos;
     }
 
-    double remap_j4_std_coord(double j4){
-      double remap_pos=static_cast<double>(180.0/M_PI*j4-m_j4_offset);
-      return remap_pos;
+    void init_pg(){
+      std::vector<std::string> cmd_msg;
+      cmd_msg.push_back("@WRITE <TRAJ_PG>"); 
+      cmd_msg.push_back("NAME=TRAJ_PG"); 
+      cmd_msg.push_back("PGN=1"); 
+      cmd_msg.push_back("END");
+      cmd_msg.push_back("");
+      cmd_msg.push_back("@LOAD <TRAJ_PG>,T1");
+
+      m_telnet->send_command(cmd_msg);
     }
 
     void move_trajectory(
@@ -290,7 +294,7 @@ class Controller{
           line += std::to_string(pose[0] * 1000) + " ";
           line += std::to_string(pose[1] * 1000) + " ";
           line += std::to_string(-pose[2] * 1000) + " ";
-          line += std::to_string(remap_j4_std_coord(pose[3])) + " 0.0 0.0";
+          line += std::to_string(180.0/M_PI*pose[3]) + " 0.0 0.0";
           cmd_msg.push_back(line);
 
           if(mi.move_type==3){
@@ -301,7 +305,7 @@ class Controller{
             line += std::to_string(pose2[0] * 1000) + " ";
             line += std::to_string(pose2[1] * 1000) + " ";
             line += std::to_string(-pose2[2] * 1000) + " ";
-            line += std::to_string(remap_j4_std_coord(pose2[3])) + " 0.0 0.0";
+            line += std::to_string(180.0/M_PI*pose2[3]) + " 0.0 0.0";
             cmd_msg.push_back(line);
           }
           pi++;

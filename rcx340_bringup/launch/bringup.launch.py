@@ -10,7 +10,7 @@ def generate_launch_description():
     controller_node = Node(
         package='rcx340_bringup',
         executable='controller_communication',
-        name='controller_communication',
+        name='controller_communication_node',
         output='screen',
         parameters=[params_file],
     )

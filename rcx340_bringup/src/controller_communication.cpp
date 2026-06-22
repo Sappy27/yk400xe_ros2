@@ -45,7 +45,6 @@ class ControllerCom : public rclcpp::Node{
         std::string m_ip;
         int m_port;
         std::vector<std::string> m_jointsNames;
-        double m_j4_offset;
 
         TelnetCommunication* m_telnet;
 
@@ -68,7 +67,7 @@ class ControllerCom : public rclcpp::Node{
             
             m_handlerMap = {
                 {1, [this](const std::string& s){handle_joints_state(s);}},
-                {2, [this](const std::string& s){handle_ef_state(s);}},
+                {2, [this](const std::string& s){handle_ee_state(s);}},
                 {3, [this](const std::string& s){handle_alarm_status(s);}},
                 {4, [this](const std::string& s){handle_mspeed_status(s);}},
                 {5, [this](const std::string& s){handle_return_to_origin_status(s);}},
@@ -90,13 +89,9 @@ class ControllerCom : public rclcpp::Node{
                 "joints_names", 
                 std::vector<std::string>{"J1","J2","J3","J4"});
 
-            this->declare_parameter<double>(
-                "j4_offset",100.0);
-
             this->get_parameter("controller_ip",m_ip);
             this->get_parameter("controller_port",m_port);
             this->get_parameter("joints_names",m_jointsNames);
-            this->get_parameter("j4_offset",m_j4_offset);
 
             m_jointStatesPublisher =
                 this->create_publisher<sensor_msgs::msg::JointState>(
@@ -169,7 +164,7 @@ class ControllerCom : public rclcpp::Node{
                 std::bind(&ControllerCom::timer_callback, this)
             );
 
-            m_controller = new Controller(m_ip,m_port,m_j4_offset,
+            m_controller = new Controller(m_ip,m_port,
                 [this](const std::string& msg) {
                     this->process_message(msg);
                 });
@@ -284,6 +279,7 @@ class ControllerCom : public rclcpp::Node{
                     "\033[32m%s\033[0m",
                     msg.c_str()
                 );
+                m_controller->init_pg();
                 return;
             }
 
@@ -371,7 +367,7 @@ class ControllerCom : public rclcpp::Node{
         }
         
         // Function to parse and publish end effector position
-        void handle_ef_state(const std::string& mes){
+        void handle_ee_state(const std::string& mes){
             std::vector<double> efPositions;
 
             size_t pos ;
@@ -394,7 +390,7 @@ class ControllerCom : public rclcpp::Node{
             efPoint.z = -efPositions[2]/1000;
 
             geometry_msgs::msg::Quaternion efQuaternion;
-            efQuaternion.z = efPositions[3];
+            efQuaternion.z = M_PI/180.0*efPositions[3];
 
             std_msgs::msg::Header efHeader = std_msgs::msg::Header();
             efHeader.frame_id = "std_coords_joint";

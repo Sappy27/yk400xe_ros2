@@ -17,17 +17,17 @@ class PickAndPlace(Node):
 
         self.lock = threading.Lock()
 
-        self.ef_ = []
+        self.ee_ = []
 
         self.home_pose_ = [0.0, 0.0, 0.0, 0.0]
         self.pick_pose_ = [0.0, 0.0, 0.0, 0.0]
         self.place_pose_ = [0.0, 0.0, 0.0, 0.0]
 
 
-        self.ef_sub_ = self.create_subscription(
+        self.ee_sub_ = self.create_subscription(
             PoseStamped,
             "/ee_state",
-            self.ef_state_cb,
+            self.ee_state_cb,
             10)
 
 
@@ -38,44 +38,44 @@ class PickAndPlace(Node):
         while not self.move_client_.wait_for_service(timeout_sec=1.0):
             self.get_logger().info("Move commands service not available, trying again")
 
-        while len(self.ef_) == 0:
+        while len(self.ee_) == 0:
             rclpy.spin_once(self)
 
         self.input_thread = threading.Thread(target=self.run, daemon=True)
         self.input_thread.start()
 
 
-    def ef_state_cb(self,msg):
+    def ee_state_cb(self,msg):
         x = msg.pose.position.x
         y = msg.pose.position.y
         z = msg.pose.position.z
         thz = msg.pose.orientation.z
-        self.ef_ = [float(x), float(y), float(z), float(thz)]
+        self.ee_ = [float(x), float(y), float(z), float(thz)]
 
 
     def input_loop(self):
         while True:
             input("Press any key")
             with self.lock:
-                print(f"ef {self.ef_}")
+                print(f"ef {self.ee_}")
 
     def set_pose(self):
         input("Place the robot in home position and press ENTER")
         with self.lock:
-            self.home_pose_ = self.ef_.copy()
+            self.home_pose_ = self.ee_.copy()
 
         input("Place the robot in pick position and press ENTER")
         with self.lock:
-            self.pick_pose_ = self.ef_.copy()
+            self.pick_pose_ = self.ee_.copy()
 
         input("Place the robot in place position and press ENTER")
         with self.lock:
-            self.place_pose_ = self.ef_.copy()
+            self.place_pose_ = self.ee_.copy()
 
 
     def is_at(self,pose,eps=0.01):
         with self.lock:
-            d = np.linalg.norm(np.array(pose[:3]) - np.array(self.ef_[:3]))
+            d = np.linalg.norm(np.array(pose[:3]) - np.array(self.ee_[:3]))
         return(d<eps)
 
 

@@ -60,7 +60,7 @@ cd .. && colcon build --symlink-install
 ``` 
 Source your workspace :  
 ```bash
-source install/setub.bash
+source install/setup.bash
 ``` 
 ### Configuration
 Open the `.yaml` configuration file and set the __controller IP address and port__. These values can be found in the RCX340 Programming Box communication settings.
@@ -75,7 +75,7 @@ colcon build --symlink-install
 ``` 
 Source your workspace :  
 ```bash
-source install/setub.bash
+source install/setup.bash
 ``` 
 ### Running the robot
 Make sure the `Manual Lock` switch on the Programming Box is set to `OFF`. Otherwise, some commands will be rejected by the controller.  
